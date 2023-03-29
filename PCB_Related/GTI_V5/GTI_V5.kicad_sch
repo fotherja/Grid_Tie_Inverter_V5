@@ -7788,7 +7788,7 @@
     (in_bom yes) (on_board yes)
     (uuid 4796479b-7254-4ed9-8074-070c73475004)
     (property "Reference" "L2" (id 0) (at 276.86 46.99 90))
-    (property "Value" "2mH" (id 1) (at 283.21 46.99 90))
+    (property "Value" "1.5mH" (id 1) (at 283.21 46.99 90))
     (property "Footprint" "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6" (id 2) (at 279.4 49.53 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -9110,7 +9110,7 @@
     (in_bom yes) (on_board yes)
     (uuid 8b129f3a-a8ef-4c29-b351-64931c69d32a)
     (property "Reference" "L4" (id 0) (at 297.18 111.76 90))
-    (property "Value" "470uH" (id 1) (at 295.91 115.57 90))
+    (property "Value" "1mH" (id 1) (at 295.91 115.57 90))
     (property "Footprint" "Inductor_THT:L_Toroid_Vertical_L41.9mm_W19.1mm_P15.80mm_Vishay_TJ7" (id 2) (at 295.91 114.3 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -9708,7 +9708,7 @@
     (in_bom yes) (on_board yes)
     (uuid a87a1738-229b-4bbd-8e18-f455fecbd89e)
     (property "Reference" "L1" (id 0) (at 276.86 111.76 90))
-    (property "Value" "2mH" (id 1) (at 283.21 111.76 90))
+    (property "Value" "1.5mH" (id 1) (at 283.21 111.76 90))
     (property "Footprint" "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6" (id 2) (at 279.4 114.3 0)
       (effects (font (size 1.27 1.27)) hide)
     )
@@ -11438,7 +11438,7 @@
     (property "Reference" "C32" (id 0) (at 364.871 42.7263 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
-    (property "Value" "470uF" (id 1) (at 364.871 45.2632 0)
+    (property "Value" "220uF" (id 1) (at 364.871 45.2632 0)
       (effects (font (size 1.27 1.27)) (justify left))
     )
     (property "Footprint" "Capacitor_THT:CP_Radial_D25.0mm_P10.00mm_SnapIn" (id 2) (at 362.9152 48.26 0)
@@ -12019,7 +12019,7 @@
       (reference "C31") (unit 1) (value "10nF") (footprint "Capacitor_SMD:C_0603_1608Metric")
     )
     (path "/f723c92a-03f3-4352-818c-0e2a0766814e"
-      (reference "C32") (unit 1) (value "470uF") (footprint "Capacitor_THT:CP_Radial_D25.0mm_P10.00mm_SnapIn")
+      (reference "C32") (unit 1) (value "220uF") (footprint "Capacitor_THT:CP_Radial_D25.0mm_P10.00mm_SnapIn")
     )
     (path "/6ef28751-54e4-4475-8239-f1fe0de4c2f5"
       (reference "C33") (unit 1) (value "2.2uF") (footprint "Capacitor_THT:C_Rect_L18.0mm_W11.0mm_P15.00mm_FKS3_FKP3")
@@ -12241,13 +12241,13 @@
       (reference "K2") (unit 1) (value "G5LE-1") (footprint "Relay_THT:Relay_SPDT_Omron-G5LE-1")
     )
     (path "/a87a1738-229b-4bbd-8e18-f455fecbd89e"
-      (reference "L1") (unit 1) (value "2mH") (footprint "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6")
+      (reference "L1") (unit 1) (value "1.5mH") (footprint "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6")
     )
     (path "/4796479b-7254-4ed9-8074-070c73475004"
-      (reference "L2") (unit 1) (value "2mH") (footprint "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6")
+      (reference "L2") (unit 1) (value "1.5mH") (footprint "Inductor_THT:L_Toroid_Vertical_L35.1mm_W21.1mm_P18.50mm_Vishay_TJ6")
     )
     (path "/8b129f3a-a8ef-4c29-b351-64931c69d32a"
-      (reference "L4") (unit 1) (value "470uH") (footprint "Inductor_THT:L_Toroid_Vertical_L41.9mm_W19.1mm_P15.80mm_Vishay_TJ7")
+      (reference "L4") (unit 1) (value "1mH") (footprint "Inductor_THT:L_Toroid_Vertical_L41.9mm_W19.1mm_P15.80mm_Vishay_TJ7")
     )
     (path "/0e05ca00-e93b-4516-b74e-38b8c537b248"
       (reference "L5") (unit 1) (value "744824622") (footprint "744824622:WE-CMB_L5")
