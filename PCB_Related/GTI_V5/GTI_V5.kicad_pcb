@@ -85,11 +85,11 @@
       (plotinvisibletext false)
       (sketchpadsonfab false)
       (subtractmaskfromsilk false)
-      (outputformat 1)
+      (outputformat 4)
       (mirror false)
       (drillshape 0)
       (scaleselection 1)
-      (outputdirectory "C:/Users/James/Documents/3_Hobby Projects/Grid_Tie_Inverter_v4/Gerbers_PCB4/")
+      (outputdirectory "C:/Users/James/Documents/3_Hobby Projects/Grid_Tie_Inverter_V5/")
     )
   )
 
@@ -230,7 +230,7 @@
   (net 134 "Net-(D9-Pad2)")
   (net 135 "/VDDA_B")
   (net 136 "unconnected-(U1-Pad55)")
-  (net 137 "Net-(K1-Pad1)")
+  (net 137 "Net-(C27-Pad2)")
   (net 138 "Net-(C28-Pad1)")
   (net 139 "Net-(K2-Pad3)")
   (net 140 "Net-(C22-Pad2)")
@@ -1969,7 +1969,7 @@
     (pad "1" thru_hole circle locked (at 0 0 90) (size 1.381 1.381) (drill 0.85) (layers *.Cu *.Mask)
       (net 15 "/Line_GND") (pintype "passive") (tstamp 21b689a2-a2b5-49ce-b0b7-e389c2ea4a08))
     (pad "2" thru_hole circle locked (at 10 0 90) (size 1.381 1.381) (drill 0.85) (layers *.Cu *.Mask)
-      (net 137 "Net-(K1-Pad1)") (pintype "passive") (tstamp 8237fdf2-ede8-452c-bba5-ddaaa65df56f))
+      (net 137 "Net-(C27-Pad2)") (pintype "passive") (tstamp 8237fdf2-ede8-452c-bba5-ddaaa65df56f))
     (model "C901U222MZVDBA7317.stp"
       (offset (xyz 4.999999925 2.499999962 7.309999833))
       (scale (xyz 1 1 1))
@@ -2537,7 +2537,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 22d02c2a-3f58-4696-9e24-eb051bbebd66)
     )
-    (fp_text value "1K" (at 0 1.43 90) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43 90) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 8b67561a-860a-4f89-9a46-63cf0c3e647c)
     )
@@ -3409,7 +3409,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 027ff9fc-6248-4c51-9043-8f448608d8e1)
     )
-    (fp_text value "10uF" (at 0 1.68 90) (layer "F.Fab") hide
+    (fp_text value "4.7uF" (at 0 1.68 90) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp a57f2b2b-8850-4e57-86ca-eabd613ca343)
     )
@@ -3929,7 +3929,7 @@
     (pad "4" thru_hole circle locked (at 5 6 90) (size 1.905 1.905) (drill 1.27) (layers *.Cu *.Mask)
       (net 140 "Net-(C22-Pad2)") (pinfunction "1") (pintype "passive") (tstamp 0c1541b9-15cb-4357-9f77-3f71c972c278))
     (pad "7" thru_hole circle locked (at 5 -6 90) (size 1.905 1.905) (drill 1.27) (layers *.Cu *.Mask)
-      (net 137 "Net-(K1-Pad1)") (pinfunction "2") (pintype "passive") (tstamp 0cf30d0f-a751-4634-ad25-e3030f056e9f))
+      (net 137 "Net-(C27-Pad2)") (pinfunction "2") (pintype "passive") (tstamp 0cf30d0f-a751-4634-ad25-e3030f056e9f))
     (pad "9" thru_hole circle locked (at -5 -6 90) (size 1.905 1.905) (drill 1.27) (layers *.Cu *.Mask)
       (net 15 "/Line_GND") (pinfunction "4") (pintype "passive") (tstamp eeb04e70-9099-4f5b-bd5a-557170c0fd5f))
   )
@@ -4035,7 +4035,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 40572cd1-987f-49ba-bfd8-1fd14ca59ebc)
     )
-    (fp_text value "4.7K" (at 0 1.43) (layer "F.Fab") hide
+    (fp_text value "2.2K" (at 0 1.43) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 5e0e0813-ab67-4a1e-a88d-99512e4a7a3d)
     )
@@ -5355,7 +5355,7 @@
       (effects (font (size 0.5 0.5) (thickness 0.1)))
       (tstamp 9494c651-6d6d-4e81-87ca-d9c24f2487ae)
     )
-    (fp_text value "2.2R" (at 0 1.43) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 78e75c15-83eb-421b-9e97-653fd30ed544)
     )
@@ -5548,7 +5548,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 1a8cbedf-12a2-40f1-bda2-ad9efac70690)
     )
-    (fp_text value "2.2R" (at 0 1.43) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 64b2c082-2d3e-43e4-8836-59c8f632b4a7)
     )
@@ -5800,7 +5800,7 @@
     (fp_line (start -8.25 -2.55) (end -1 -2.55) (layer "F.Fab") (width 0.1) (tstamp 84df3d28-0be4-4194-9445-aaa1bedee3e0))
     (fp_line (start -8.25 19.95) (end -8.25 -2.55) (layer "F.Fab") (width 0.1) (tstamp 918ced78-26f8-423d-be8a-8c2a686f5e44))
     (pad "1" thru_hole rect (at 0 0) (size 2.5 2.5) (drill 1.3) (layers *.Cu *.Mask)
-      (net 137 "Net-(K1-Pad1)") (pintype "passive") (tstamp cef1f3a5-b3a3-4e5b-bb3b-3f754878230c))
+      (net 137 "Net-(C27-Pad2)") (pintype "passive") (tstamp cef1f3a5-b3a3-4e5b-bb3b-3f754878230c))
     (pad "2" thru_hole oval (at -6 2) (size 2.5 2.5) (drill 1.3) (layers *.Cu *.Mask)
       (net 93 "/Relay") (pintype "passive") (tstamp e76d3fbc-e86d-4ffb-9dd9-ccd451ea3809))
     (pad "3" thru_hole oval (at -6 14.2) (size 2.5 2.5) (drill 1.3) (layers *.Cu *.Mask)
@@ -5927,7 +5927,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 203e11a1-070c-489a-b4db-1e7116fa8bc6)
     )
-    (fp_text value "2.2R" (at 0 1.43) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 874afcb3-56e2-4073-81d2-231a5727faab)
     )
@@ -6659,7 +6659,7 @@
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 34baf8bc-7e43-4bae-bd56-3d3275fc10eb)
     )
-    (fp_text value "1K" (at 0 1.43 90) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43 90) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 7ea0cbf4-5d52-48bd-b18d-9838c53e990a)
     )
@@ -6701,7 +6701,7 @@
       (effects (font (size 0.5 0.5) (thickness 0.1)))
       (tstamp fc4caa49-d35b-4ba3-8431-2dfd9be8191e)
     )
-    (fp_text value "2.2R" (at 0 1.43) (layer "F.Fab") hide
+    (fp_text value "4.7K" (at 0 1.43) (layer "F.Fab") hide
       (effects (font (size 1 1) (thickness 0.15)))
       (tstamp 9624b85d-5fcb-4648-823d-37cff4ac76cf)
     )
@@ -7479,7 +7479,7 @@
     (fp_line (start -1 0.625) (end 1 0.625) (layer "B.Fab") (width 0.1) (tstamp b0556929-4c18-4c10-bfbc-14de9a6a8fb6))
     (fp_line (start -1 -0.625) (end -1 0.625) (layer "B.Fab") (width 0.1) (tstamp c4d97a0f-3b90-4497-b4e9-a24ea07c1c23))
     (pad "1" smd roundrect (at -0.9125 0 270) (size 1.025 1.4) (layers "B.Cu" "B.Paste" "B.Mask") (roundrect_rratio 0.243902439)
-      (net 137 "Net-(K1-Pad1)") (pintype "passive") (tstamp 9bd2c3d4-ca87-4230-ab9e-c93549bb9d5e))
+      (net 137 "Net-(C27-Pad2)") (pintype "passive") (tstamp 9bd2c3d4-ca87-4230-ab9e-c93549bb9d5e))
     (pad "2" smd roundrect (at 0.9125 0 270) (size 1.025 1.4) (layers "B.Cu" "B.Paste" "B.Mask") (roundrect_rratio 0.243902439)
       (net 60 "Net-(R5-Pad2)") (pintype "passive") (tstamp 4b0ab0b2-31bc-4935-a748-47b2bb7c45a2))
     (model "${KICAD6_3DMODEL_DIR}/Resistor_SMD.3dshapes/R_0805_2012Metric.wrl"
@@ -8154,7 +8154,7 @@
       (effects (font (size 1.27 1.27) (thickness 0.254)) (justify mirror))
       (tstamp 10403506-e329-4001-b93c-2514920de75e)
     )
-    (fp_text value "DIODE" (at 0 0) (layer "B.SilkS") hide
+    (fp_text value "ES1J" (at 0 0) (layer "B.SilkS") hide
       (effects (font (size 1.27 1.27) (thickness 0.254)) (justify mirror))
       (tstamp da26d51f-426b-43dc-92b1-df799f1958e5)
     )
@@ -10735,11 +10735,9 @@
         (xy 71.5915 94.695784)
         (xy 71.59081 94.708955)
         (xy 71.586496 94.75)
-        (xy 71.5915 94.79761)
+        (xy 71.587186 94.756565)
+        (xy 71.604483 94.921134)
         (xy 71.606458 94.939928)
-        (xy 71.608498 94.946205)
-        (xy 71.608498 94.946207)
-        (xy 71.640234 95.04388)
         (xy 71.665473 95.121556)
         (xy 71.76096 95.286944)
         (xy 71.765378 95.291851)
@@ -10771,7 +10769,8 @@
         (xy 73.23904 95.286944)
         (xy 73.334527 95.121556)
         (xy 73.393542 94.939928)
-        (xy 73.4085 94.79761)
+        (xy 73.395518 94.921134)
+        (xy 73.412814 94.756565)
         (xy 73.413504 94.75)
         (xy 73.40919 94.708955)
         (xy 73.4085 94.695784)
