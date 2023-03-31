@@ -91,7 +91,6 @@ volatile float 		I_Output_Demand = 0;
 
 volatile uint8_t    Run_Controller_Flag = 0;
 volatile uint8_t	Run_Grid_Checks_Flag = 0;
-volatile uint8_t	Run_PLL_Flag = 0;
 uint8_t				HB_Enabled_Flag = false;
 
 /* USER CODE END PV */
@@ -160,14 +159,14 @@ int main(void)
 
   // Initialise DAC and LED for Debugging
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
-  HAL_GPIO_WritePin(GPIOA, Relay_Pin, GPIO_PIN_SET);					// Do not open the relays under load until we have snubbers/TVS protection
+  HAL_GPIO_WritePin(GPIOA, Relay_Pin, GPIO_PIN_SET);
 
   // Enable the interrupts by the analogue watchdog
   DFSDM_Filter_AwdParamTypeDef awdParamFilter0;
   awdParamFilter0.DataSource = DFSDM_FILTER_AWD_CHANNEL_DATA;
   awdParamFilter0.Channel = DFSDM_CHANNEL_0;
   awdParamFilter0.HighBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter0.HighThreshold = 3600 << 8;							// about 400V
+  awdParamFilter0.HighThreshold = 400 << 8;												//3600 << 8; about 400V
   awdParamFilter0.LowBreakSignal = DFSDM_NO_BREAK_SIGNAL;
   awdParamFilter0.LowThreshold = -50 << 8;
   HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter0, &awdParamFilter0);
@@ -188,8 +187,8 @@ int main(void)
   HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter3, Icap_DMA, 1);
 
   // Enable the interrupts by the analogue watchdog
+  HAL_NVIC_EnableIRQ(DFSDM1_FLT0_IRQn);
   HAL_NVIC_EnableIRQ(DFSDM1_FLT1_IRQn);
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -202,7 +201,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  Main_Loop();
-	  //hdfsdm1_filter1.Instance->FLTAWCFR = 0b1000000010;
   }
   /* USER CODE END 3 */
 }
@@ -266,11 +264,6 @@ void Main_Loop()	{
 		Run_Grid_Checks_Flag = 0;
 		Grid_Checks();
 	}
-
-	if(Run_PLL_Flag == 1)	{
-		Run_PLL_Flag = 0;
-		PLL();
-	}
 }
 
 void HB_Disable() {
@@ -301,7 +294,6 @@ void HB_Enable() {
 	HAL_GPIO_WritePin(GPIOA, LED_Pin, GPIO_PIN_SET);
 }
 
-
 float Integral(int32_t datum)
 {
 	// Keep a running summation of the last INTEGRAL_SIZE values passed into this function.
@@ -319,7 +311,6 @@ float Integral(int32_t datum)
 	Sum -= Buffer[Index];
 	return((float)Sum);
 }
-
 
 int32_t Integrate_Mains_MS(int32_t grid_voltage_sample)
 {
@@ -390,7 +381,7 @@ void Grid_Checks()	{
 	}
 
 	if(Freq_Offset > FREQ_DEVIATION_LIMIT || Freq_Offset < -FREQ_DEVIATION_LIMIT)	{
-	//	Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;									// If our mains frequency is out of tolerance
+		Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;									// If our mains frequency is out of tolerance
 		Error_Code |= 0b01000;
 	}
 
@@ -424,32 +415,46 @@ void Grid_Checks()	{
 	Grid_Good_Bad_Cnt++;
 	Grid_Good_Bad_Cnt = CONSTRAIN(Grid_Good_Bad_Cnt, GRID_UNACCEPTABLE, GRID_ACCEPTABLE);
 
-	if(I_Output_Demand < 16.0e-3f)
+	if(I_Output_Demand < 12.0e-3f)
 		I_Output_Demand += 2.0e-6f;
 }
 
 void Controller()	{
-	float const kr = 1000.0;
+	float const kt = 2.6666666e4;
+	static int16_t Duty_Cycle;
+	static float E_Prev1 = 0, E_Prev2 = 0;
+
+	// 50 Hz Resonant term
+	float const kr_50 = 4000.0;
 	float const Wdamp_50 = 2.0 * 3.1415927 * 0.75;
 	float const Wres_50  = 2.0 * 3.1415927 * 50.0;
-	float const kt = 2.6666666e4;
 
-	float const a1 = 2 * kr * kt * Wdamp_50;
-	float const b0 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
-	float const b1 = 2 * kt * kt - 2 * Wres_50  * Wres_50 ;
-	float const b2 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
+	float const a1_50 = 2 * kr_50 * kt * Wdamp_50;
+	float const b0_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
+	float const b1_50 = 2 * kt * kt - 2 * Wres_50  * Wres_50 ;
+	float const b2_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
 
-	static int16_t Duty_Cycle;
-	static float E_Prev2 = 0, E_Prev1 = 0;
-	static float U_Prev2 = 0, U_Prev1 = 0;
+	static float U_Prev1_50 = 0, U_Prev2_50 = 0;
+
+	// 150 Hz Resonant term
+	float const kr_150 = 1000.0;
+	float const Wdamp_150 = 2.0 * 3.1415927 * 1.5;
+	float const Wres_150  = 2.0 * 3.1415927 * 150.0;
+
+	float const a1_150 = 2 * kr_150 * kt * Wdamp_150;
+	float const b0_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150 ;
+	float const b1_150 = 2 * kt * kt - 2 * Wres_150  * Wres_150 ;
+	float const b2_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150 ;
+
+	static float U_Prev1_150 = 0, U_Prev2_150 = 0;
 
 	// This enables our H-Bridge at the up-going zero crossing point if we are requesting to join the grid.
 	if(HB_Enabled_Flag == REQUEST_JOIN_GRID)	{
 		if(_50_Index == 0)	{
 			I_OUT_PID.iTerm = 0;
 			E_Prev2 = 0; E_Prev1 = 0;												// Absolutely key to zero these! Perhaps why v4 exploded...
-			U_Prev2 = 0; U_Prev1 = 0;
-			I_Output_Demand = 8.0e-3f;
+			U_Prev2_50 = 0; U_Prev1_50 = 0;
+			I_Output_Demand = 4.0e-3f;
 			HB_Enable();
 		}
 	}
@@ -461,23 +466,33 @@ void Controller()	{
 	float Timer4_CNT_Ratio = 0.001f * (float)Timer4_CNT;							// Timer4 counts from 0-999 (multiplication faster than division)
 	float LO_Sample_256 = Sin_LookupF[Lookup_Index] + (diff * Timer4_CNT_Ratio);
 
-	// -------------- Iterate our PI+R Controller:
+	// -------------- Iterate our PI Controller:
 	// Calculations for the PI controller:
 	I_OUT_PID.setpoint = LO_Sample_256 * I_Output_Demand;
 	I_OUT_PID.input = I_grid;
 	PIDCompute(&I_OUT_PID);
 
-	// Calculations for the resonant controller:
-	float Ua = a1 * E_Prev1 - a1 * E_Prev2;
-	float Ub = b1 * U_Prev1 - b2 * U_Prev2;
-	float Ui = (Ua + Ub) / b0;
+	// Calculations for the 50Hz resonant controller:
+	float Ua_50 = a1_50 * E_Prev1 - a1_50 * E_Prev2;
+	float Ub_50 = b1_50 * U_Prev1_50 - b2_50 * U_Prev2_50;
+	float Ui_50 = (Ua_50 + Ub_50) / b0_50;
 
+	U_Prev2_50 = U_Prev1_50;
+	U_Prev1_50 = Ui_50;
+
+	// Calculations for the 150Hz resonant controller:
+	float Ua_150 = a1_150 * E_Prev1 - a1_150 * E_Prev2;
+	float Ub_150 = b1_150 * U_Prev1_150 - b2_150 * U_Prev2_150;
+	float Ui_150 = (Ua_150 + Ub_150) / b0_150;
+
+	U_Prev2_150 = U_Prev1_150;
+	U_Prev1_150 = Ui_150;
+
+	// Record the previous error values then calculate our overall voltage to output
 	E_Prev2 = E_Prev1;
 	E_Prev1 = I_OUT_PID.error;
-	U_Prev2 = U_Prev1;
-	U_Prev1 = Ui;
 
-	float Demanded_Output_Voltage = I_OUT_PID.output + Ui;
+	float Demanded_Output_Voltage = I_OUT_PID.output + Ui_50 + Ui_150;
 	Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);				//Duty_Cycle = 800; (int16_t)(LO_Sample_256 * 3.8);
 
 	// Constrain and output the new duty cycle
@@ -493,9 +508,10 @@ void Controller()	{
 	}
 
 	/* Output to DAC for debugging */
-	//uint32_t DAC_Data = 2048 + (int32_t)(Ui * 1000.0f);
-	uint32_t DAC_Data = 2048 + (int32_t)(LO_Sample_256*6.0);
-	//uint32_t DAC_Data = 2048 + (int32_t)(I_grid*316.0);								// This results in 4 A/V on our scope allowing for +/- 5A.
+	//uint32_t DAC_Data = 2048 + (int32_t)(Ui_150 * 100.0f);
+	//uint32_t DAC_Data = 2048 + (int32_t)(LO_Sample_256*6.0);
+	//uint32_t DAC_Data = 2048 + (int32_t)(V_grid * 100.0f);
+	uint32_t DAC_Data = 2048 + (int32_t)(I_grid*316.0);								// This results in 4 A/V on our scope allowing for +/- 5A.
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, DAC_Data);
 }
 
@@ -504,13 +520,12 @@ void PLL()	{
 	PLL_PID.input = Integral(Signal_Multiple);   									// Integrate this Multiple over the last 1 period
 	PIDCompute(&PLL_PID); 															// Plug result in a PI controller to maintain 0 phase shift
 
-	TIM4->ARR = SINE_STEP_PERIOD;// - (int32_t)PLL_PID.output; 						// adjust LO frequency (step period) to synchronise to grid
+	TIM4->ARR = SINE_STEP_PERIOD + (int32_t)PLL_PID.output; 						// adjust LO frequency (step period) to synchronise to grid
 
 	_50_Index++;  																	// Increment our LO indices
 	if(_50_Index == SINE_STEPS)
 		_50_Index = 0;
 }
-
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim == &htim2)	{
