@@ -382,9 +382,9 @@ void HAL_DFSDM_ChannelMspInit(DFSDM_Channel_HandleTypeDef* dfsdm_channelHandle)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* DFSDM1 interrupt Init */
-    HAL_NVIC_SetPriority(DFSDM1_FLT0_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(DFSDM1_FLT0_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DFSDM1_FLT0_IRQn);
-    HAL_NVIC_SetPriority(DFSDM1_FLT1_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(DFSDM1_FLT1_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(DFSDM1_FLT1_IRQn);
   /* USER CODE BEGIN DFSDM1_MspInit 1 */
 

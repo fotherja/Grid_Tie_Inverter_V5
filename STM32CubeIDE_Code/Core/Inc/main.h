@@ -107,12 +107,12 @@ void Error_Handler(void);
 
 #define 		F_CONVERSION_K 			5.0e-2f								// These are calibration constants
 
-#define 		RMS_LOWER_LIMIT 		100 										// These values are for the grid checks. We disconnect if our metrics are out of these ranges (SI Units)
-#define 		RMS_UPPER_LIMIT 		400											// Volts squared!
+#define 		RMS_LOWER_LIMIT 		600 										// These values are for the grid checks. We disconnect if our metrics are out of these ranges (SI Units)
+#define 		RMS_UPPER_LIMIT 		900											// Volts squared!
 #define 		FREQ_DEVIATION_LIMIT 	1.5f
-#define			V_BUS_MINIMUM			15.0f
-#define 		V_BUS_MAXIMUM 			28.0f
-#define 		I_OUTPUT_MAXIMUM 		5.0f
+#define			V_BUS_MINIMUM			42.0f
+#define 		V_BUS_MAXIMUM 			56.0f
+#define 		I_OUTPUT_MAXIMUM 		6.5f
 
 #define 		ENABLE_JOINING_GRID 	true
 #define			REQUEST_JOIN_GRID		2

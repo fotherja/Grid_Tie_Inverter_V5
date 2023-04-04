@@ -15,9 +15,9 @@
   ******************************************************************************
   *
   *	To Do:
-  *	1) AWD for DFSDM cutouts
-  *	2) Add 150, 250 and 350Hz Resonant terms
-  *	3) Test PLL again and tune it for a 240V grid
+  *	1)
+  *	2)
+  *	3)
   *	4) Flash LED when grid checks are not successful
   */
 /* USER CODE END Header */
@@ -50,7 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-float Sin_LookupF[65] =
+const float Sin_LookupF[65] =
 {
 		0, 25.09238792, 49.94312244, 74.31287738, 97.96695869, 120.6775646, 142.2259797, 162.4046807,
 		181.019336, 197.8906761, 212.8562207, 225.7718437, 236.5131603, 244.9767259, 251.0810318, 254.76729,
@@ -63,7 +63,7 @@ float Sin_LookupF[65] =
 		0
 };
 
-float Cos_LookupF[65] =
+const float Cos_LookupF[65] =
 {
 		256, 254.76729, 251.0810318, 244.9767259, 236.5131603, 225.7718437, 212.8562207, 197.8906761,
 		181.019336, 162.4046807, 142.2259797, 120.6775646, 97.96695869, 74.31287738, 49.94312244, 25.09238792,
@@ -81,17 +81,19 @@ PIDControl 			PLL_PID, I_OUT_PID; 										// These structures are used to stor
 
 // DMA buffers and key values
 int32_t 			Vbus_DMA[1], Igrid_DMA[1], Vgrid_DMA[1], Icap_DMA[1];
-float 				I_grid, V_grid, I_cap, V_bus; 								// These are our SI unit values
+volatile float 		I_grid, V_grid, I_cap, V_bus; 								// These are our SI unit values
 
 // LO Phase
-uint8_t 			_50_Index = 0;
+volatile uint8_t 	_50_Index = 0;
 
 volatile uint8_t 	Error_Code;
 volatile float 		I_Output_Demand = 0;
 
 volatile uint8_t    Run_Controller_Flag = 0;
 volatile uint8_t	Run_Grid_Checks_Flag = 0;
-uint8_t				HB_Enabled_Flag = false;
+volatile uint8_t	HB_Enabled_Flag = false;
+
+volatile int32_t	Workload_Counter = 0, Max_Workload = 0;
 
 /* USER CODE END PV */
 
@@ -103,7 +105,6 @@ void HB_Enable(void);
 void Grid_Checks(void);
 void Controller(void);
 void PLL(void);
-void Main_Loop(void);
 void HAL_DFSDM_FilterAwdCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter, uint32_t Channel, uint32_t Threshold);
 void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter);
 float Integral(int32_t datum);
@@ -147,6 +148,7 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM4_Init();
   MX_DAC1_Init();
+  MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
   // Initialise the PID controller for the PLL
   PIDInit(&PLL_PID, PLL_Kp, PLL_Ki, PLL_Kd, PLL_PERIOD, -PLL_LIMIT, PLL_LIMIT, AUTOMATIC, DIRECT, P_ON_E);
@@ -156,6 +158,7 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_Base_Start_IT(&htim3);
   HAL_TIM_Base_Start_IT(&htim4);
+  HAL_TIM_Base_Start_IT(&htim5);
 
   // Initialise DAC and LED for Debugging
   HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
@@ -166,7 +169,7 @@ int main(void)
   awdParamFilter0.DataSource = DFSDM_FILTER_AWD_CHANNEL_DATA;
   awdParamFilter0.Channel = DFSDM_CHANNEL_0;
   awdParamFilter0.HighBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter0.HighThreshold = 400 << 8;												//3600 << 8; about 400V
+  awdParamFilter0.HighThreshold = 500 << 8;												//3600 << 8; about 400V
   awdParamFilter0.LowBreakSignal = DFSDM_NO_BREAK_SIGNAL;
   awdParamFilter0.LowThreshold = -50 << 8;
   HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter0, &awdParamFilter0);
@@ -175,9 +178,9 @@ int main(void)
   awdParamFilter1.DataSource = DFSDM_FILTER_AWD_CHANNEL_DATA;
   awdParamFilter1.Channel = DFSDM_CHANNEL_1;
   awdParamFilter1.HighBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter1.HighThreshold = 2700 << 8;
+  awdParamFilter1.HighThreshold = 3000 << 8;
   awdParamFilter1.LowBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter1.LowThreshold = -2700 << 8;
+  awdParamFilter1.LowThreshold = -3000 << 8;
   HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter1, &awdParamFilter1);
 
   // Start the DFSDMs
@@ -200,7 +203,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  Main_Loop();
+	if(Run_Controller_Flag == 1)	{
+		Run_Controller_Flag = 0;
+		Controller();
+	}
+
+	if(Run_Grid_Checks_Flag == 1)	{
+		Run_Grid_Checks_Flag = 0;
+		Grid_Checks();
+	}
   }
   /* USER CODE END 3 */
 }
@@ -254,18 +265,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void Main_Loop()	{
-	if(Run_Controller_Flag == 1)	{
-		Run_Controller_Flag = 0;
-		Controller();
-	}
-
-	if(Run_Grid_Checks_Flag == 1)	{
-		Run_Grid_Checks_Flag = 0;
-		Grid_Checks();
-	}
-}
-
 void HB_Disable() {
 	// Disable the H-Bridge
 	HAL_GPIO_WritePin(GPIOA, Driver_Disable_Pin, GPIO_PIN_SET);
@@ -415,7 +414,7 @@ void Grid_Checks()	{
 	Grid_Good_Bad_Cnt++;
 	Grid_Good_Bad_Cnt = CONSTRAIN(Grid_Good_Bad_Cnt, GRID_UNACCEPTABLE, GRID_ACCEPTABLE);
 
-	if(I_Output_Demand < 12.0e-3f)
+	if(I_Output_Demand < 22.0e-3f)
 		I_Output_Demand += 2.0e-6f;
 }
 
@@ -430,9 +429,9 @@ void Controller()	{
 	float const Wres_50  = 2.0 * 3.1415927 * 50.0;
 
 	float const a1_50 = 2 * kr_50 * kt * Wdamp_50;
-	float const b0_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
-	float const b1_50 = 2 * kt * kt - 2 * Wres_50  * Wres_50 ;
-	float const b2_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50 ;
+	float const b0_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
+	float const b1_50 = 2 * kt * kt - 2 * Wres_50  * Wres_50;
+	float const b2_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
 
 	static float U_Prev1_50 = 0, U_Prev2_50 = 0;
 
@@ -442,11 +441,35 @@ void Controller()	{
 	float const Wres_150  = 2.0 * 3.1415927 * 150.0;
 
 	float const a1_150 = 2 * kr_150 * kt * Wdamp_150;
-	float const b0_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150 ;
-	float const b1_150 = 2 * kt * kt - 2 * Wres_150  * Wres_150 ;
-	float const b2_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150 ;
+	float const b0_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150;
+	float const b1_150 = 2 * kt * kt - 2 * Wres_150  * Wres_150;
+	float const b2_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150;
 
 	static float U_Prev1_150 = 0, U_Prev2_150 = 0;
+
+	// 250 Hz Resonant term
+	float const kr_250 = 1000.0;
+	float const Wdamp_250 = 2.0 * 3.1415927 * 1.5;
+	float const Wres_250  = 2.0 * 3.1415927 * 250.0;
+
+	float const a1_250 = 2 * kr_250 * kt * Wdamp_250;
+	float const b0_250 = kt * kt + 2 * kt * Wdamp_250 + Wres_250  * Wres_250;
+	float const b1_250 = 2 * kt * kt - 2 * Wres_250  * Wres_250;
+	float const b2_250 = kt * kt + 2 * kt * Wdamp_250 + Wres_250  * Wres_250;
+
+	static float U_Prev1_250 = 0, U_Prev2_250 = 0;
+
+	// 350 Hz Resonant term
+	float const kr_350 = 1000.0;
+	float const Wdamp_350 = 2.0 * 3.1415927 * 1.5;
+	float const Wres_350  = 2.0 * 3.1415927 * 350.0;
+
+	float const a1_350 = 2 * kr_350 * kt * Wdamp_350;
+	float const b0_350 = kt * kt + 2 * kt * Wdamp_350 + Wres_350  * Wres_350;
+	float const b1_350 = 2 * kt * kt - 2 * Wres_350  * Wres_350;
+	float const b2_350 = kt * kt + 2 * kt * Wdamp_350 + Wres_350  * Wres_350;
+
+	static float U_Prev1_350 = 0, U_Prev2_350 = 0;
 
 	// This enables our H-Bridge at the up-going zero crossing point if we are requesting to join the grid.
 	if(HB_Enabled_Flag == REQUEST_JOIN_GRID)	{
@@ -458,7 +481,6 @@ void Controller()	{
 			HB_Enable();
 		}
 	}
-
 	// Interpolate our LO steps to get a more accurate LO sample:
 	uint32_t Timer4_CNT = TIM4->CNT;												// Take records of the current counter values
 	uint8_t Lookup_Index = _50_Index;
@@ -472,7 +494,7 @@ void Controller()	{
 	I_OUT_PID.input = I_grid;
 	PIDCompute(&I_OUT_PID);
 
-	// Calculations for the 50Hz resonant controller:
+	// Calculations for the 50Hz resonant controllers:
 	float Ua_50 = a1_50 * E_Prev1 - a1_50 * E_Prev2;
 	float Ub_50 = b1_50 * U_Prev1_50 - b2_50 * U_Prev2_50;
 	float Ui_50 = (Ua_50 + Ub_50) / b0_50;
@@ -480,7 +502,7 @@ void Controller()	{
 	U_Prev2_50 = U_Prev1_50;
 	U_Prev1_50 = Ui_50;
 
-	// Calculations for the 150Hz resonant controller:
+	// 150Hz:
 	float Ua_150 = a1_150 * E_Prev1 - a1_150 * E_Prev2;
 	float Ub_150 = b1_150 * U_Prev1_150 - b2_150 * U_Prev2_150;
 	float Ui_150 = (Ua_150 + Ub_150) / b0_150;
@@ -488,12 +510,28 @@ void Controller()	{
 	U_Prev2_150 = U_Prev1_150;
 	U_Prev1_150 = Ui_150;
 
+	// 250Hz:
+	float Ua_250 = a1_250 * E_Prev1 - a1_250 * E_Prev2;
+	float Ub_250 = b1_250 * U_Prev1_250 - b2_250 * U_Prev2_250;
+	float Ui_250 = (Ua_250 + Ub_250) / b0_250;
+
+	U_Prev2_250 = U_Prev1_250;
+	U_Prev1_250 = Ui_250;
+
+	// 350Hz:
+	float Ua_350 = a1_350 * E_Prev1 - a1_350 * E_Prev2;
+	float Ub_350 = b1_350 * U_Prev1_350 - b2_350 * U_Prev2_350;
+	float Ui_350 = (Ua_350 + Ub_350) / b0_350;
+
+	U_Prev2_350 = U_Prev1_350;
+	U_Prev1_350 = Ui_350;
+
 	// Record the previous error values then calculate our overall voltage to output
 	E_Prev2 = E_Prev1;
 	E_Prev1 = I_OUT_PID.error;
 
-	float Demanded_Output_Voltage = I_OUT_PID.output + Ui_50 + Ui_150;
-	Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);				//Duty_Cycle = 800; (int16_t)(LO_Sample_256 * 3.8);
+	float Demanded_Output_Voltage = I_OUT_PID.output + Ui_50 + Ui_150 + Ui_250 + Ui_350;
+	Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);							//Duty_Cycle = 800; (int16_t)(LO_Sample_256 * 3.8);
 
 	// Constrain and output the new duty cycle
 	Duty_Cycle = CONSTRAIN(Duty_Cycle, -DUTY_LIMIT, DUTY_LIMIT);
@@ -513,6 +551,9 @@ void Controller()	{
 	//uint32_t DAC_Data = 2048 + (int32_t)(V_grid * 100.0f);
 	uint32_t DAC_Data = 2048 + (int32_t)(I_grid*316.0);								// This results in 4 A/V on our scope allowing for +/- 5A.
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, DAC_Data);
+
+	// Debug how many time this function is being called per second (should be 13333 Hz)
+	Workload_Counter++;
 }
 
 void PLL()	{
@@ -538,6 +579,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 	if (htim == &htim4)	{															// ### Runs 3.2 kHz and iterates the PLL ###
 		PLL();
+	}
+
+	if (htim == &htim5)	{															// ### Runs at 1Hz to assess processor workload ###
+		Max_Workload = Workload_Counter;
+		Workload_Counter = 0;
 	}
 }
 
