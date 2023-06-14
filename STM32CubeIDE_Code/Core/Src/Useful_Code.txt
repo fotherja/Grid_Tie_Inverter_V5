@@ -1,0 +1,123 @@
+void Controller()	{
+	static int16_t Duty_Cycle;
+	float const kt = 5.3333333e4; //2.6666667e4;
+	static float E_Prev1 = 0, E_Prev2 = 0;
+
+	// 50 Hz Resonant term
+	float const kr_50 = 400.0;
+	float const Wdamp_50 = 2.0 * 3.1415927 * 1.0;
+	float const Wres_50  = 2.0 * 3.1415927 * 50.0;
+	float const a1_50 = 2 * kr_50 * kt * Wdamp_50;
+	float const b0_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
+	float const b1_50 = 2 * kt * kt - 2 * Wres_50  * Wres_50;
+	float const b2_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
+	static float U_Prev1_50 = 0, U_Prev2_50 = 0;
+
+	// This enables our H-Bridge at the up-going zero crossing point if we are requesting to join the grid.
+	if(HB_Enabled_Flag == REQUEST_JOIN_GRID)	{
+		if(_50_Index == 15)	{
+			I_OUT_PID.iTerm = 0;
+			E_Prev1 = 0; E_Prev2 = 0;												// Absolutely key to zero these! Perhaps why v4 exploded...
+			U_Prev1_50 = 0;  U_Prev2_50 = 0;
+
+			I_Output_Demand = 1.2e-3f;
+			HB_Enable();
+		}
+	}
+
+	// Interpolate our LO steps to get a more accurate LO sample:
+	uint32_t Timer4_CNT = TIM4->CNT;												// Take recordings so they are less likely to change during the calculations
+	uint8_t Lookup_Index = _50_Index;
+	//Lookup_Index = (Lookup_Index + 63) % 64;
+	float diff = Sin_LookupF[Lookup_Index + 1] - Sin_LookupF[Lookup_Index];			// This is why our lookup table has 65 values.
+	float Timer4_CNT_Ratio = 0.001f * (float)Timer4_CNT;							// Timer4 counts from 0-999 (multiplication faster than division)
+	float LO_Sample_256 = Sin_LookupF[Lookup_Index] + (diff * Timer4_CNT_Ratio);
+
+	// -------------- Iterate our PI Controller:
+	I_OUT_PID.setpoint = LO_Sample_256 * I_Output_Demand;
+	I_grid = ((float)I_grid_DMA) * I_GRID_SENSOR_K;
+	I_OUT_PID.input = I_grid;
+	PIDCompute(&I_OUT_PID);
+
+	// -------------- Iterate our 50 Hz Resonant Controller:
+	float Ua_50 = a1_50 * E_Prev1 - a1_50 * E_Prev2;
+	float Ub_50 = b1_50 * U_Prev1_50 - b2_50 * U_Prev2_50;
+	float Ui_50 = (Ua_50 + Ub_50) / b0_50;
+	U_Prev2_50 = U_Prev1_50;
+	U_Prev1_50 = Ui_50;
+c
+	// Record the previous error values then calculate our overall voltage to output
+	E_Prev2 = E_Prev1;
+	E_Prev1 = I_OUT_PID.error;
+
+	float Demanded_Output_Voltage = I_OUT_PID.output + Ui_50;// + Ui_150;// + Ui_250 + Ui_350;
+	V_bus = ((float)V_bus_DMA) * V_BUS_SENSOR_K;
+	Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);							//Duty_Cycle = 800; (int16_t)(LO_Sample_256 * 3.8);
+
+	// Constrain and output the new duty cycle
+	Duty_Cycle = CONSTRAIN(Duty_Cycle, -DUTY_LIMIT, DUTY_LIMIT);
+
+	if(Duty_Cycle >= 0) {
+		htim1.Instance->CCR1 = Duty_Cycle;
+		htim1.Instance->CCR2 = 0;
+	}
+	else {
+		htim1.Instance->CCR1 = 0;
+		htim1.Instance->CCR2 = -Duty_Cycle;
+	}
+
+	/* Output to DAC for debugging */
+	//uint32_t DAC_Data = 2048 + (int32_t)(Ui_50 * 1.0f);
+	uint32_t DAC_Data = 2048 + (int32_t)(LO_Sample_256*6.0);
+	//uint32_t DAC_Data = 2048 + (int32_t)(V_grid * 5.0f);
+	//uint32_t DAC_Data = (int32_t)(V_bus * 8.0f);
+	//uint32_t DAC_Data = 2048 + (int32_t)(I_grid*632.0);								// This results in 2 A/V on our scope allowing for +/- 5A.
+	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, DAC_Data);
+
+	// Debug how many time this function is being called per second (should be 13333 Hz)
+	//Workload_Counter++;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//		if(Frequency_Adjment > Freq_Max)
+//			Freq_Direction = -1;
+//		if(Frequency_Adjment < Freq_Min)
+//			Freq_Direction = 1;
+//
+//		if(Freq_Direction == -1)
+//			Frequency_Adjment -= 1;
+//		else
+//			Frequency_Adjment += 1;
+
+
+
+
+
+
+	//float output = 0.0;
+	//const float ALPHA = 0.001f;
+	//output = (ALPHA * Grid_Frequency) + ((1 - ALPHA) * output);
+
+
+
+
+
+
+
+
+
+
+
+

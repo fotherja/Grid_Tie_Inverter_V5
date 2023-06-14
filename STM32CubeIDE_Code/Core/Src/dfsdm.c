@@ -53,8 +53,8 @@ void MX_DFSDM1_Init(void)
   hdfsdm1_filter0.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter0.Init.RegularParam.DmaMode = ENABLE;
   hdfsdm1_filter0.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
-  hdfsdm1_filter0.Init.FilterParam.Oversampling = 125;
-  hdfsdm1_filter0.Init.FilterParam.IntOversampling = 4;
+  hdfsdm1_filter0.Init.FilterParam.Oversampling = 82;
+  hdfsdm1_filter0.Init.FilterParam.IntOversampling = 1;
   if (HAL_DFSDM_FilterInit(&hdfsdm1_filter0) != HAL_OK)
   {
     Error_Handler();
@@ -64,8 +64,8 @@ void MX_DFSDM1_Init(void)
   hdfsdm1_filter1.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter1.Init.RegularParam.DmaMode = ENABLE;
   hdfsdm1_filter1.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
-  hdfsdm1_filter1.Init.FilterParam.Oversampling = 125;
-  hdfsdm1_filter1.Init.FilterParam.IntOversampling = 4;
+  hdfsdm1_filter1.Init.FilterParam.Oversampling = 82;
+  hdfsdm1_filter1.Init.FilterParam.IntOversampling = 1;
   if (HAL_DFSDM_FilterInit(&hdfsdm1_filter1) != HAL_OK)
   {
     Error_Handler();
@@ -75,8 +75,8 @@ void MX_DFSDM1_Init(void)
   hdfsdm1_filter2.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter2.Init.RegularParam.DmaMode = ENABLE;
   hdfsdm1_filter2.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
-  hdfsdm1_filter2.Init.FilterParam.Oversampling = 125;
-  hdfsdm1_filter2.Init.FilterParam.IntOversampling = 4;
+  hdfsdm1_filter2.Init.FilterParam.Oversampling = 82;
+  hdfsdm1_filter2.Init.FilterParam.IntOversampling = 1;
   if (HAL_DFSDM_FilterInit(&hdfsdm1_filter2) != HAL_OK)
   {
     Error_Handler();
@@ -86,8 +86,8 @@ void MX_DFSDM1_Init(void)
   hdfsdm1_filter3.Init.RegularParam.FastMode = DISABLE;
   hdfsdm1_filter3.Init.RegularParam.DmaMode = ENABLE;
   hdfsdm1_filter3.Init.FilterParam.SincOrder = DFSDM_FILTER_SINC3_ORDER;
-  hdfsdm1_filter3.Init.FilterParam.Oversampling = 125;
-  hdfsdm1_filter3.Init.FilterParam.IntOversampling = 4;
+  hdfsdm1_filter3.Init.FilterParam.Oversampling = 82;
+  hdfsdm1_filter3.Init.FilterParam.IntOversampling = 1;
   if (HAL_DFSDM_FilterInit(&hdfsdm1_filter3) != HAL_OK)
   {
     Error_Handler();
@@ -252,7 +252,7 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
     hdma_dfsdm1_flt0.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_dfsdm1_flt0.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_dfsdm1_flt0.Init.Mode = DMA_CIRCULAR;
-    hdma_dfsdm1_flt0.Init.Priority = DMA_PRIORITY_MEDIUM;
+    hdma_dfsdm1_flt0.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_dfsdm1_flt0) != HAL_OK)
     {
       Error_Handler();
@@ -274,7 +274,7 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
     hdma_dfsdm1_flt1.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_dfsdm1_flt1.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_dfsdm1_flt1.Init.Mode = DMA_CIRCULAR;
-    hdma_dfsdm1_flt1.Init.Priority = DMA_PRIORITY_MEDIUM;
+    hdma_dfsdm1_flt1.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_dfsdm1_flt1) != HAL_OK)
     {
       Error_Handler();
@@ -296,7 +296,7 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
     hdma_dfsdm1_flt2.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_dfsdm1_flt2.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_dfsdm1_flt2.Init.Mode = DMA_CIRCULAR;
-    hdma_dfsdm1_flt2.Init.Priority = DMA_PRIORITY_MEDIUM;
+    hdma_dfsdm1_flt2.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_dfsdm1_flt2) != HAL_OK)
     {
       Error_Handler();
@@ -318,7 +318,7 @@ void HAL_DFSDM_FilterMspInit(DFSDM_Filter_HandleTypeDef* dfsdm_filterHandle)
     hdma_dfsdm1_flt3.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
     hdma_dfsdm1_flt3.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_dfsdm1_flt3.Init.Mode = DMA_CIRCULAR;
-    hdma_dfsdm1_flt3.Init.Priority = DMA_PRIORITY_MEDIUM;
+    hdma_dfsdm1_flt3.Init.Priority = DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_dfsdm1_flt3) != HAL_OK)
     {
       Error_Handler();

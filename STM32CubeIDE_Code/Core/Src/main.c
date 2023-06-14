@@ -3,23 +3,28 @@
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  ******************************************************************************
-  *
-  *	To Do:
-  *	1)
-  *	2)
-  *	3)
-  *	4) Flash LED when grid checks are not successful
-  */
+  ***************************************************************************************
+ * MIT License
+ * Copyright (c) [2023] [James Fotherby]
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ ***************************************************************************************/
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -33,6 +38,7 @@
 /* USER CODE BEGIN Includes */
 #include "PID.h"
 #include "math.h"
+#include "PR.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,24 +82,22 @@ const float Cos_LookupF[65] =
 		256
 };
 
-// PID Structures
-PIDControl 			PLL_PID, I_OUT_PID; 										// These structures are used to store the respective PID variables
+// Necessary Global Structures
+PIDControl 						PLL_PID, I_OUT_PID, P_OUT_PID; 								// These structures are used to store the respective PID variables
+DFSDM_Filter_AwdParamTypeDef 	awdParamFilter0;
+DFSDM_Filter_AwdParamTypeDef 	awdParamFilter1;
+PR_t 							PR_50, PR_150, PR_250, PR_350, PR_450, PR_550;
 
-// DMA buffers and key values
-int32_t 			Vbus_DMA[1], Igrid_DMA[1], Vgrid_DMA[1], Icap_DMA[1];
-volatile float 		I_grid, V_grid, I_cap, V_bus; 								// These are our SI unit values
-
-// LO Phase
-volatile uint8_t 	_50_Index = 0;
-
-volatile uint8_t 	Error_Code;
-volatile float 		I_Output_Demand = 0;
-
-volatile uint8_t    Run_Controller_Flag = 0;
-volatile uint8_t	Run_Grid_Checks_Flag = 0;
+// Necessary Global variables:
+int32_t 			I_grid_DMA, V_grid_DMA, I_cap_DMA, V_bus_DMA;							// These variables are updated automatically by the DFSDM and DMA peripherals
+volatile uint8_t    Run_Controller_Flag = 0, Run_Grid_Checks_Flag = 0, Run_PLL_Flag = 0;
 volatile uint8_t	HB_Enabled_Flag = false;
 
-volatile int32_t	Workload_Counter = 0, Max_Workload = 0;
+volatile int16_t 	Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
+float 				I_Output_Demand = 0;
+
+//Debug variables
+//float Grid_Frequency;
 
 /* USER CODE END PV */
 
@@ -113,7 +117,6 @@ int32_t Integrate_Mains_MS(int32_t grid_voltage_sample);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -150,44 +153,44 @@ int main(void)
   MX_DAC1_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  // Initialise DAC for Debugging and ensure the relays are closed
+  HAL_GPIO_WritePin(GPIOA, Driver_Disable_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, Relay_Pin, GPIO_PIN_SET);
+  HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
+
   // Initialise the PID controller for the PLL
   PIDInit(&PLL_PID, PLL_Kp, PLL_Ki, PLL_Kd, PLL_PERIOD, -PLL_LIMIT, PLL_LIMIT, AUTOMATIC, DIRECT, P_ON_E);
   PIDInit(&I_OUT_PID, I_OUT_Kp, I_OUT_Ki, I_OUT_Kd, I_OUT_PERIOD, -I_OUT_Limit, I_OUT_Limit, AUTOMATIC, DIRECT, P_ON_E);
+  PIDInit(&P_OUT_PID, P_OUT_Kp, P_OUT_Ki, P_OUT_Kd, P_OUT_PERIOD, P_OUT_MIN, P_OUT_MAX, AUTOMATIC, REVERSE, P_ON_E);
 
   // Initialise our timers
-  HAL_TIM_Base_Start_IT(&htim2);
-  HAL_TIM_Base_Start_IT(&htim3);
-  HAL_TIM_Base_Start_IT(&htim4);
-  HAL_TIM_Base_Start_IT(&htim5);
+  HAL_TIM_Base_Start_IT(&htim2);															// Used to periodically run the grid checks
+  HAL_TIM_Base_Start_IT(&htim3);															// Used to periodically run the current controller
+  HAL_TIM_Base_Start_IT(&htim4);															// Used to periodically run the PLL routine
+  HAL_TIM_Base_Start_IT(&htim5);															// Used as a phase counter 0-63 per 50Hz period
 
-  // Initialise DAC and LED for Debugging
-  HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
-  HAL_GPIO_WritePin(GPIOA, Relay_Pin, GPIO_PIN_SET);
+  // Start the DFSDMs
+  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, &V_bus_DMA, 1);
+  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter1, &I_grid_DMA, 1);
+  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter2, &V_grid_DMA, 1);
+  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter3, &I_cap_DMA, 1);
 
-  // Enable the interrupts by the analogue watchdog
-  DFSDM_Filter_AwdParamTypeDef awdParamFilter0;
+  // Enable the interrupts by the analogue watchdog of he DFSDM peripheral (These are vitally important)
   awdParamFilter0.DataSource = DFSDM_FILTER_AWD_CHANNEL_DATA;
   awdParamFilter0.Channel = DFSDM_CHANNEL_0;
   awdParamFilter0.HighBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter0.HighThreshold = 500 << 8;												//3600 << 8; about 400V
+  awdParamFilter0.HighThreshold = 3700 << 8;												//420 = 50V (Avg ~4 values), 1540 = 185V, 3700 = 445V
   awdParamFilter0.LowBreakSignal = DFSDM_NO_BREAK_SIGNAL;
   awdParamFilter0.LowThreshold = -50 << 8;
   HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter0, &awdParamFilter0);
 
-  DFSDM_Filter_AwdParamTypeDef awdParamFilter1;
   awdParamFilter1.DataSource = DFSDM_FILTER_AWD_CHANNEL_DATA;
   awdParamFilter1.Channel = DFSDM_CHANNEL_1;
   awdParamFilter1.HighBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter1.HighThreshold = 3000 << 8;
+  awdParamFilter1.HighThreshold = 2500 << 8;												//It's about 500 per A
   awdParamFilter1.LowBreakSignal = DFSDM_NO_BREAK_SIGNAL;
-  awdParamFilter1.LowThreshold = -3000 << 8;
+  awdParamFilter1.LowThreshold = -2500 << 8;
   HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter1, &awdParamFilter1);
-
-  // Start the DFSDMs
-  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter0, Vbus_DMA, 1);
-  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter1, Igrid_DMA, 1);
-  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter2, Vgrid_DMA, 1);
-  HAL_DFSDM_FilterRegularStart_DMA(&hdfsdm1_filter3, Icap_DMA, 1);
 
   // Enable the interrupts by the analogue watchdog
   HAL_NVIC_EnableIRQ(DFSDM1_FLT0_IRQn);
@@ -196,8 +199,6 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HB_Disable();
-
   while (1)
   {
     /* USER CODE END WHILE */
@@ -211,6 +212,11 @@ int main(void)
 	if(Run_Grid_Checks_Flag == 1)	{
 		Run_Grid_Checks_Flag = 0;
 		Grid_Checks();
+	}
+
+	if(Run_PLL_Flag == 1)	{
+		Run_PLL_Flag = 0;
+		PLL();
 	}
   }
   /* USER CODE END 3 */
@@ -265,43 +271,65 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_DFSDM_FilterAwdCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter, uint32_t Channel, uint32_t Threshold)	{
+	HB_Disable();
+}
+
 void HB_Disable() {
 	// Disable the H-Bridge
 	HAL_GPIO_WritePin(GPIOA, Driver_Disable_Pin, GPIO_PIN_SET);
 
+	// Disable the interrupts by the analogue watchdog
+	HAL_DFSDM_FilterAwdStop_IT(&hdfsdm1_filter0);
+	HAL_DFSDM_FilterAwdStop_IT(&hdfsdm1_filter1);
+
+	// Stop the PWM outputs
 	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
 	HAL_TIMEx_PWMN_Stop(&htim1, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_2);
 	HAL_TIMEx_PWMN_Stop(&htim1, TIM_CHANNEL_2);
-	HB_Enabled_Flag = false;
 
-	htim1.Instance->CCR1 = 0;
-	htim1.Instance->CCR2 = 0;
-
+	// Turn off the "H-Brige enabled LED", reset our grid check recovery period etc
 	HAL_GPIO_WritePin(GPIOA, LED_Pin, GPIO_PIN_RESET);
+	Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
+	HB_Enabled_Flag = false;
 }
 
 void HB_Enable() {
+	// Ensure we never proceed without ensuring our over current and voltage protection is enabled
+	if((hdfsdm1_filter0.Instance->FLTCR2 & DFSDM_FLTCR2_AWDIE) == 0)	{
+		Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
+		HB_Enabled_Flag = false;
+		return;
+	}
+	if((hdfsdm1_filter1.Instance->FLTCR2 & DFSDM_FLTCR2_AWDIE) == 0)	{
+		Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
+		HB_Enabled_Flag = false;
+		return;
+	}
+
 	// Start our PWM driver which uses Timer1 to power our H-bridge. Both channels start with Duty = 0
+	htim1.Instance->CCR1 = 0;
+	htim1.Instance->CCR2 = 0;
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
 	HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
 	HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+
+	// Enable the H-Bridge
+	HAL_GPIO_WritePin(GPIOA, Driver_Disable_Pin, GPIO_PIN_RESET);
 	HB_Enabled_Flag = true;
 
-	HAL_GPIO_WritePin(GPIOA, Driver_Disable_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOA, LED_Pin, GPIO_PIN_SET);
 }
 
-float Integral(int32_t datum)
-{
+float Integral(int32_t datum)	{
 	// Keep a running summation of the last INTEGRAL_SIZE values passed into this function.
 	static int32_t 		Buffer[INTEGRAL_SIZE];
 	static int16_t  	Index = 0;
 	static int32_t  	Sum = 0;
 
 	Sum += datum;
-
 	Buffer[Index++] = datum;
 
 	if(Index == INTEGRAL_SIZE)
@@ -311,17 +339,14 @@ float Integral(int32_t datum)
 	return((float)Sum);
 }
 
-int32_t Integrate_Mains_MS(int32_t grid_voltage_sample)
-{
+int32_t Integrate_Mains_MS(int32_t grid_voltage_sample)	{
 	// Maintain an MS measurement of the grid voltage. Runs at 800Hz which is 16 samples per period
 	static int32_t 		Buffer[RMS_INTEGRAL_SIZE];
 	static int8_t  		Index = 0;
 	static int32_t  	Sum = 0;
 
 	int32_t Sample_sqrd = grid_voltage_sample * grid_voltage_sample;
-
 	Sum += Sample_sqrd;
-
 	Buffer[Index++] = Sample_sqrd;
 
 	if(Index == RMS_INTEGRAL_SIZE)
@@ -329,209 +354,105 @@ int32_t Integrate_Mains_MS(int32_t grid_voltage_sample)
 
 	Sum -= Buffer[Index];
 
-	int32_t Mean_Squared = Sum >> 6;			// Divide Sum by 64 (RMS_INTEGRAL_SIZE)
-	return(Mean_Squared);						// return(sqrtf(RMS));
-}
-
-void HAL_DFSDM_FilterAwdCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter, uint32_t Channel, uint32_t Threshold)
-{
-	HB_Disable();
-	HB_Enabled_Flag = OVER_IV_TRIP;
-}
-
-void HAL_DFSDM_FilterRegConvCpltCallback(DFSDM_Filter_HandleTypeDef *hdfsdm_filter)	{
-	if(hdfsdm_filter == &hdfsdm1_filter0)	{
-		V_bus = (float)Vbus_DMA[0] * 2.4414e-7 + 5.0e-4;
-	}
-	if(hdfsdm_filter == &hdfsdm1_filter1)	{
-		I_grid = (float)Igrid_DMA[0] * -3.96725e-9 + 8.75e-6;
-	}
-	if(hdfsdm_filter == &hdfsdm1_filter2)	{
-		V_grid = (float)Vgrid_DMA[0] * 2.4414e-7 + 5.0e-4;
-	}
-	if(hdfsdm_filter == &hdfsdm1_filter3)	{
-		I_cap = (float)Icap_DMA[0] * 3.1738e-9 - 8.75e-6;
-	}
+	int32_t Mean_Squared = Sum >> 6;														// Divide Sum by 64 (RMS_INTEGRAL_SIZE)
+	return(Mean_Squared);
 }
 
 void Grid_Checks()	{
-	static 	int16_t Grid_Good_Bad_Cnt 	= GRID_UNACCEPTABLE;
-	int32_t 		Mains_MS 			= Integrate_Mains_MS((int32_t)V_grid); 		// Update our mains RMS measurement
-	float 			Freq_Offset 		= PLL_PID.output * F_CONVERSION_K; 			// Get the frequency difference between the grid and a 50Hz reference
+	float 	V_grid = ((float)V_grid_DMA) * V_GRID_SENSOR_K;
+	float 	V_bus = ((float)V_bus_DMA) * V_BUS_SENSOR_K;
+	float	Freq_Offset;
+	int32_t	Mains_MS;
 
-	// These are our high priority checks:
-	if(V_bus > V_BUS_MAXIMUM)	{													// If our DC Bus voltage is too high cut-out immediately
-		HB_Disable();
-		Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
-		Error_Code |= 0b00001;
-	}
+	Mains_MS 	= Integrate_Mains_MS((int32_t)V_grid); 										// Update our mains RMS measurement
+	Freq_Offset = PLL_PID.output * F_CONVERSION_K; 											// Get the frequency difference between the grid and a 50Hz reference
 
-	if(I_grid > I_OUTPUT_MAXIMUM || I_grid < -I_OUTPUT_MAXIMUM)	{					// Likewise, if we detect excess current flowing, cut-out immediately
-		HB_Disable();
-		Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
-		Error_Code |= 0b00010;
-	}
-	//------------------------------------------------------------------------------
-
-	// These are lower priority checks and have to be out of range for an amount of time
-	if(Mains_MS > RMS_UPPER_LIMIT || Mains_MS < RMS_LOWER_LIMIT)	{				// If mains RMS voltage whacky
+	// These checks have to be out of range for an amount of time (<100ms)
+	if(Mains_MS > RMS_UPPER_LIMIT || Mains_MS < RMS_LOWER_LIMIT)							// If grid Mean-Squared voltage out of tolerance
 		Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;
-		Error_Code |= 0b00100;
-	}
 
-	if(Freq_Offset > FREQ_DEVIATION_LIMIT || Freq_Offset < -FREQ_DEVIATION_LIMIT)	{
-		Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;									// If our mains frequency is out of tolerance
-		Error_Code |= 0b01000;
-	}
-
-	if(V_bus < V_BUS_MINIMUM)	{													// If our DC Bus voltage is too low
+	if(Freq_Offset > FREQ_DEV_LIMIT || Freq_Offset < -FREQ_DEV_LIMIT)						// If our mains frequency is out of tolerance
 		Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;
-		Error_Code |= 0b10000;
-	}
-	//------------------------------------------------------------------------------
 
-	// Act on the above checks
-	if(Grid_Good_Bad_Cnt < GRID_OK)	{												// If our metrics have been whacky for too long stop output
-		if(HB_Enabled_Flag == true) {
-			HB_Disable(); 															// This puts the H-bridge into a high impedance state
-			Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
+	if(V_bus > V_BUS_MAXIMUM || V_bus < V_BUS_MINIMUM)										// If our DC Bus voltage is out of tolerance
+		Grid_Good_Bad_Cnt -= GRID_BAD_FAIL_RATE;
+	//------------------------------------------------------------------------------
+	if(Grid_Good_Bad_Cnt < GRID_OK)	{														// If our metrics have been wrong for too long -> stop output
+		if(HB_Enabled_Flag == true)
+			HB_Disable(); 																	// This puts the H-bridge into a high impedance state
+	}
+
+	if(HB_Enabled_Flag == false) { 															// With our output idle, if the grid has normalised, restart
+		if(Grid_Good_Bad_Cnt == GRID_OK)	{
+			HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter1, &awdParamFilter1);				// Enable the interrupts by the analogue watchdog
+			HAL_DFSDM_FilterAwdStart_IT(&hdfsdm1_filter0, &awdParamFilter0);				// Enable current trip THEN V-bus
 		}
-	}
 
-	if(HB_Enabled_Flag == false) { 													// With our output idle, if the grid has normalised, restart
-		if(Grid_Good_Bad_Cnt == GRID_ACCEPTABLE && ENABLE_JOINING_GRID == true) {
+		if(Grid_Good_Bad_Cnt == GRID_ACCEPTABLE && ENABLE_JOINING_GRID == true)
 			HB_Enabled_Flag = REQUEST_JOIN_GRID;
-			Error_Code = 0;
-		}
-	}
-	if(HB_Enabled_Flag == OVER_IV_TRIP)	{
-		Grid_Good_Bad_Cnt = GRID_UNACCEPTABLE;
-		HB_Enabled_Flag = false;
 	}
 	//-------------------------------------------------------------------------------
-
-	// Constrain and decay any error counts
-	Grid_Good_Bad_Cnt++;
+	Grid_Good_Bad_Cnt++;																	// Constrain and decay any error counts
 	Grid_Good_Bad_Cnt = CONSTRAIN(Grid_Good_Bad_Cnt, GRID_UNACCEPTABLE, GRID_ACCEPTABLE);
 
-	if(I_Output_Demand < 22.0e-3f)
-		I_Output_Demand += 2.0e-6f;
+	P_OUT_PID.setpoint = 370.0f;
+	P_OUT_PID.input = V_bus;
+	PIDCompute(&P_OUT_PID);
+	I_Output_Demand = P_OUT_PID.output;
+
+	// Debug stuff:
+	//Grid_Frequency = 50.0 + Freq_Offset;
 }
 
 void Controller()	{
-	float const kt = 2.6666666e4;
-	static int16_t Duty_Cycle;
-	static float E_Prev1 = 0, E_Prev2 = 0;
-
-	// 50 Hz Resonant term
-	float const kr_50 = 4000.0;
-	float const Wdamp_50 = 2.0 * 3.1415927 * 0.75;
-	float const Wres_50  = 2.0 * 3.1415927 * 50.0;
-
-	float const a1_50 = 2 * kr_50 * kt * Wdamp_50;
-	float const b0_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
-	float const b1_50 = 2 * kt * kt - 2 * Wres_50  * Wres_50;
-	float const b2_50 = kt * kt + 2 * kt * Wdamp_50 + Wres_50  * Wres_50;
-
-	static float U_Prev1_50 = 0, U_Prev2_50 = 0;
-
-	// 150 Hz Resonant term
-	float const kr_150 = 1000.0;
-	float const Wdamp_150 = 2.0 * 3.1415927 * 1.5;
-	float const Wres_150  = 2.0 * 3.1415927 * 150.0;
-
-	float const a1_150 = 2 * kr_150 * kt * Wdamp_150;
-	float const b0_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150;
-	float const b1_150 = 2 * kt * kt - 2 * Wres_150  * Wres_150;
-	float const b2_150 = kt * kt + 2 * kt * Wdamp_150 + Wres_150  * Wres_150;
-
-	static float U_Prev1_150 = 0, U_Prev2_150 = 0;
-
-	// 250 Hz Resonant term
-	float const kr_250 = 1000.0;
-	float const Wdamp_250 = 2.0 * 3.1415927 * 1.5;
-	float const Wres_250  = 2.0 * 3.1415927 * 250.0;
-
-	float const a1_250 = 2 * kr_250 * kt * Wdamp_250;
-	float const b0_250 = kt * kt + 2 * kt * Wdamp_250 + Wres_250  * Wres_250;
-	float const b1_250 = 2 * kt * kt - 2 * Wres_250  * Wres_250;
-	float const b2_250 = kt * kt + 2 * kt * Wdamp_250 + Wres_250  * Wres_250;
-
-	static float U_Prev1_250 = 0, U_Prev2_250 = 0;
-
-	// 350 Hz Resonant term
-	float const kr_350 = 1000.0;
-	float const Wdamp_350 = 2.0 * 3.1415927 * 1.5;
-	float const Wres_350  = 2.0 * 3.1415927 * 350.0;
-
-	float const a1_350 = 2 * kr_350 * kt * Wdamp_350;
-	float const b0_350 = kt * kt + 2 * kt * Wdamp_350 + Wres_350  * Wres_350;
-	float const b1_350 = 2 * kt * kt - 2 * Wres_350  * Wres_350;
-	float const b2_350 = kt * kt + 2 * kt * Wdamp_350 + Wres_350  * Wres_350;
-
-	static float U_Prev1_350 = 0, U_Prev2_350 = 0;
-
 	// This enables our H-Bridge at the up-going zero crossing point if we are requesting to join the grid.
 	if(HB_Enabled_Flag == REQUEST_JOIN_GRID)	{
-		if(_50_Index == 0)	{
+		if(TIM5->CNT == 0)	{
 			I_OUT_PID.iTerm = 0;
-			E_Prev2 = 0; E_Prev1 = 0;												// Absolutely key to zero these! Perhaps why v4 exploded...
-			U_Prev2_50 = 0; U_Prev1_50 = 0;
-			I_Output_Demand = 4.0e-3f;
+			P_OUT_PID.iTerm = 0;
+			pr_init(&PR_50, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			pr_init(&PR_150, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			pr_init(&PR_250, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			pr_init(&PR_350, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			pr_init(&PR_450, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			pr_init(&PR_550, 0.0f, 1000.0f, 10.0f, I_OUT_PERIOD);
+			I_Output_Demand = 2.0e-3f;
 			HB_Enable();
 		}
 	}
+
 	// Interpolate our LO steps to get a more accurate LO sample:
-	uint32_t Timer4_CNT = TIM4->CNT;												// Take records of the current counter values
-	uint8_t Lookup_Index = _50_Index;
-	float diff = Sin_LookupF[Lookup_Index + 1] - Sin_LookupF[Lookup_Index];
-	float Timer4_CNT_Ratio = 0.001f * (float)Timer4_CNT;							// Timer4 counts from 0-999 (multiplication faster than division)
+	uint32_t Timer4_CNT = TIM4->CNT;														// Take recordings so they are less likely to change during the calculations
+	uint8_t Lookup_Index = TIM5->CNT;
+	float diff = Sin_LookupF[Lookup_Index + 1] - Sin_LookupF[Lookup_Index];					// This is why our lookup table has 65 values.
+	float Timer4_CNT_Ratio = 0.001f * (float)Timer4_CNT;									// Timer4 counts from 0-999 (multiplication faster than division)
 	float LO_Sample_256 = Sin_LookupF[Lookup_Index] + (diff * Timer4_CNT_Ratio);
 
+	// -------------- Update our voltage metrics:
+	float V_bus = ((float)V_bus_DMA) * V_BUS_SENSOR_K;
+	float I_grid = ((float)I_grid_DMA) * I_GRID_SENSOR_K;
+	float I_cap = ((float)I_cap_DMA) * I_GRID_SENSOR_K;
+
 	// -------------- Iterate our PI Controller:
-	// Calculations for the PI controller:
 	I_OUT_PID.setpoint = LO_Sample_256 * I_Output_Demand;
 	I_OUT_PID.input = I_grid;
 	PIDCompute(&I_OUT_PID);
 
-	// Calculations for the 50Hz resonant controllers:
-	float Ua_50 = a1_50 * E_Prev1 - a1_50 * E_Prev2;
-	float Ub_50 = b1_50 * U_Prev1_50 - b2_50 * U_Prev2_50;
-	float Ui_50 = (Ua_50 + Ub_50) / b0_50;
+	// -------------- Iterate our Resonant Controllers:
+	float Ui_50 = pr_calc(&PR_50, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 50.0);
+	float Ui_150 = pr_calc(&PR_150, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 150.0);
+	float Ui_250 = pr_calc(&PR_250, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 250.0);
+	float Ui_350 = pr_calc(&PR_350, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 350.0);
 
-	U_Prev2_50 = U_Prev1_50;
-	U_Prev1_50 = Ui_50;
+	float Ui_450 = pr_calc(&PR_450, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 450.0);
+	float Ui_550 = pr_calc(&PR_550, I_OUT_PID.setpoint, I_grid, 2 * 3.1415926 * 550.0);
 
-	// 150Hz:
-	float Ua_150 = a1_150 * E_Prev1 - a1_150 * E_Prev2;
-	float Ub_150 = b1_150 * U_Prev1_150 - b2_150 * U_Prev2_150;
-	float Ui_150 = (Ua_150 + Ub_150) / b0_150;
+	// -------------- Iterate our Feed-forward Controllers:
+	float Feedforward = LO_Sample_256 * 1.40;
 
-	U_Prev2_150 = U_Prev1_150;
-	U_Prev1_150 = Ui_150;
-
-	// 250Hz:
-	float Ua_250 = a1_250 * E_Prev1 - a1_250 * E_Prev2;
-	float Ub_250 = b1_250 * U_Prev1_250 - b2_250 * U_Prev2_250;
-	float Ui_250 = (Ua_250 + Ub_250) / b0_250;
-
-	U_Prev2_250 = U_Prev1_250;
-	U_Prev1_250 = Ui_250;
-
-	// 350Hz:
-	float Ua_350 = a1_350 * E_Prev1 - a1_350 * E_Prev2;
-	float Ub_350 = b1_350 * U_Prev1_350 - b2_350 * U_Prev2_350;
-	float Ui_350 = (Ua_350 + Ub_350) / b0_350;
-
-	U_Prev2_350 = U_Prev1_350;
-	U_Prev1_350 = Ui_350;
-
-	// Record the previous error values then calculate our overall voltage to output
-	E_Prev2 = E_Prev1;
-	E_Prev1 = I_OUT_PID.error;
-
-	float Demanded_Output_Voltage = I_OUT_PID.output + Ui_50 + Ui_150 + Ui_250 + Ui_350;
-	Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);							//Duty_Cycle = 800; (int16_t)(LO_Sample_256 * 3.8);
+	// -------------- Add together the various control outputs:
+	float Demanded_Output_Voltage = Feedforward + I_OUT_PID.output + Ui_50 + Ui_150 + Ui_250 + Ui_350 + Ui_450 + Ui_550;
+	int16_t Duty_Cycle = (int16_t)(Demanded_Output_Voltage * DUTY_MAX / V_bus);
 
 	// Constrain and output the new duty cycle
 	Duty_Cycle = CONSTRAIN(Duty_Cycle, -DUTY_LIMIT, DUTY_LIMIT);
@@ -546,45 +467,32 @@ void Controller()	{
 	}
 
 	/* Output to DAC for debugging */
-	//uint32_t DAC_Data = 2048 + (int32_t)(Ui_150 * 100.0f);
+	//DAC_Data = (int32_t)(TIM5->CNT * 64);
 	//uint32_t DAC_Data = 2048 + (int32_t)(LO_Sample_256*6.0);
-	//uint32_t DAC_Data = 2048 + (int32_t)(V_grid * 100.0f);
-	uint32_t DAC_Data = 2048 + (int32_t)(I_grid*316.0);								// This results in 4 A/V on our scope allowing for +/- 5A.
+	//uint32_t DAC_Data = 2048 + (int32_t)(V_grid * 5.0f);
+	//uint32_t DAC_Data = (int32_t)(V_bus * 8.0f);
+	//uint32_t DAC_Data = 2048 + (int32_t)(I_cap*1263.0);
+	uint32_t DAC_Data = 2048 + (int32_t)(I_grid*421.0);										// This results in 3 A/V on our scope allowing for +/- 5A.
 	HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, DAC_Data);
-
-	// Debug how many time this function is being called per second (should be 13333 Hz)
-	Workload_Counter++;
 }
 
 void PLL()	{
-	int32_t Signal_Multiple = (int32_t)(Cos_LookupF[_50_Index] * V_grid);			// Multiply the LO Cosine value with our current phase voltage sample
-	PLL_PID.input = Integral(Signal_Multiple);   									// Integrate this Multiple over the last 1 period
-	PIDCompute(&PLL_PID); 															// Plug result in a PI controller to maintain 0 phase shift
-
-	TIM4->ARR = SINE_STEP_PERIOD + (int32_t)PLL_PID.output; 						// adjust LO frequency (step period) to synchronise to grid
-
-	_50_Index++;  																	// Increment our LO indices
-	if(_50_Index == SINE_STEPS)
-		_50_Index = 0;
+	float V_grid = ((float)V_grid_DMA) * V_GRID_SENSOR_K;
+	int32_t Signal_Multiple = (int32_t)(Cos_LookupF[TIM5->CNT] * V_grid);					// Multiply the LO Cosine value with our current phase voltage sample
+	PLL_PID.input = Integral(Signal_Multiple);   											// Integrate this Multiple over the last 1 period
+	PIDCompute(&PLL_PID); 																	// Plug result in a PI controller to maintain 0 phase shift
+	TIM4->ARR = SINE_STEP_PERIOD + (int32_t)PLL_PID.output; 								// adjust LO frequency (step period) to synchronise to grid (Important to have ARR_Preload enabled)
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-	if (htim == &htim2)	{
-		Run_Grid_Checks_Flag = 1;													// #### Runs 800Hz to perform our safety checks ####
-	}
+	if (htim == &htim2)
+		Run_Grid_Checks_Flag = 1;															// ## Runs 800Hz to perform our low priority safety checks ##
 
-	if (htim == &htim3)	{
-		Run_Controller_Flag = 1;													// ### Runs at 13.3kHz to iterate the controller ###
-	}
+	if (htim == &htim3)
+		Run_Controller_Flag = 1;															// ## Runs at 13.3kHz to iterate the controller ##
 
-	if (htim == &htim4)	{															// ### Runs 3.2 kHz and iterates the PLL ###
-		PLL();
-	}
-
-	if (htim == &htim5)	{															// ### Runs at 1Hz to assess processor workload ###
-		Max_Workload = Workload_Counter;
-		Workload_Counter = 0;
-	}
+	if (htim == &htim4)																		// ## Runs 3.2kHz and iterates the PLL ##
+		Run_PLL_Flag = 1;
 }
 
 /* USER CODE END 4 */

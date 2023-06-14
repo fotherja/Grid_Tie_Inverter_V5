@@ -85,45 +85,52 @@ void Error_Handler(void);
 #define Relay_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
-#define 		PLL_Kp 					5.0e-4f 								// PID parameters for our PLL tracking control
-#define 		PLL_Ki 					1.0e-4f									// These are for a 18.6V peak signal. (scale to different peaks)
+#define 		CONSTRAIN(x,lower,upper) ((x)<(lower)?(lower):((x)>(upper)?(upper):(x)))
+//##############################################
+#define 		PLL_Kp 					2.5e-5f 								// PID parameters for our PLL tracking control
+#define 		PLL_Ki 					5.0e-6f									// These are for a 18.6V peak signal. (scale to different peaks)
 #define 		PLL_Kd 					0.0f
 #define 		PLL_LIMIT 				50.0f
 #define 		PLL_PERIOD 				3.125e-4f 								// 1 / (50 * 64) seconds
-#define 		SINE_STEP_PERIOD 		999 									// Ticks between incrementing our LO (Local Osc) index for 50Hz sine
+#define 		F_CONVERSION_K 			-5.0e-2f									// calibration constant
 //##############################################
-#define			I_OUT_Kp				20.0e0f									// PID parameters for our current output controller
-#define			I_OUT_Ki				1.0e0f
+#define			I_OUT_Kp				20.0f									// PID parameters for our current output controller
+#define			I_OUT_Ki				10.0f
 #define			I_OUT_Kd				0.0f
-#define			I_OUT_Limit				100.0f									// Max voltage swing
+#define			I_OUT_Limit				400.0f									// Max voltage swing
 #define			I_OUT_PERIOD			75.0e-6f
-
 //##############################################
-#define 		SINE_STEPS           	64                          			// Number of steps to build our sine wave in
+#define			P_OUT_Kp				1.0e-4f									// PID parameters for our power output controller
+#define			P_OUT_Ki				1.0e-3f
+#define			P_OUT_Kd				0.0f
+#define			P_OUT_PERIOD			1.25e-3f
+#define			P_OUT_MIN				2.0e-3f
+#define			P_OUT_MAX				14.0e-3f
+//##############################################
+#define 		SINE_STEP_PERIOD 		999 									// Ticks between incrementing our LO (Local Osc) index for 50Hz sine
 #define 		DUTY_LIMIT 				975 									// Our duty width can vary from -1000 to +1000
-#define			DUTY_MAX				1000.0f
+#define			DUTY_MAX				1000.0f									// should be 999 but 1000 helps account for deadtime losses
 #define			INTEGRAL_SIZE			64
 #define			RMS_INTEGRAL_SIZE		64
-
-#define 		F_CONVERSION_K 			5.0e-2f								// These are calibration constants
-
-#define 		RMS_LOWER_LIMIT 		600 										// These values are for the grid checks. We disconnect if our metrics are out of these ranges (SI Units)
-#define 		RMS_UPPER_LIMIT 		900											// Volts squared!
-#define 		FREQ_DEVIATION_LIMIT 	1.5f
-#define			V_BUS_MINIMUM			42.0f
-#define 		V_BUS_MAXIMUM 			56.0f
-#define 		I_OUTPUT_MAXIMUM 		6.5f
+#define 		GRID_ACCEPTABLE 		1000
+#define 		GRID_OK					0
+#define 		GRID_UNACCEPTABLE 		-1000
+#define 		GRID_BAD_FAIL_RATE 		14 										// Some grid checks are allowed to fail for a certain amount of time (eg. Frequency) this parameter determines for how long
+#define			REQUEST_JOIN_GRID		2
+//##############################################
+#define 		RMS_LOWER_LIMIT 		50000 									// These values are for the grid checks. We disconnect if our metrics are out of these ranges (SI Units)
+#define 		RMS_UPPER_LIMIT 		70000									// Volts squared!
+#define 		FREQ_DEV_LIMIT 			0.5f
+#define			V_BUS_MINIMUM			362.0f
+#define 		V_BUS_MAXIMUM 			420.0f
 
 #define 		ENABLE_JOINING_GRID 	true
-#define			REQUEST_JOIN_GRID		2
-#define			OVER_IV_TRIP			3
 
-#define 		GRID_ACCEPTABLE 		1000
-#define 		GRID_UNACCEPTABLE 		-1000
-#define 		GRID_BAD_FAIL_RATE 		10 										// Some grid checks are allowed to fail for a certain amount of time (eg. Frequency) this parameter determines for how long
-#define 		GRID_OK					0
+//##############################################
+#define 		I_GRID_SENSOR_K 		-5.65e-8
+#define 		V_BUS_SENSOR_K 			3.45e-6
+#define 		V_GRID_SENSOR_K 		3.45e-6
 
-#define 		CONSTRAIN(x,lower,upper) ((x)<(lower)?(lower):((x)>(upper)?(upper):(x)))
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
